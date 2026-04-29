@@ -70,3 +70,21 @@ for(Thread t: Thread.getAllStackTraces.keySet()){
 ```java
 t2.setDaemon(true); // By default it is set to false for all the threads
 ```
+
+#### Setting priority of threads
+```java
+Thread low = new Thread(new Task(),"Low Priority Thread");
+Thread medium = new Thread(new Task(),"Medium Priority Thread");
+Thread high = new Thread(new Task(),"High priority task");
+
+low.setPriority(Thread.MIN_PRIORITY);
+medium.setPriority(Thread.NORM_PRIORITY);
+high.setPriority(Thread.MAX_PRIORITY);
+```
+### Stack Memory and Heap Memory
+| Stack | Heap |
+| ---   | --- |
+| Stores Method Calls, local variables and reference variable | Stores Objects and instance variables |
+| Smaller in size, faster to access | larger in size, slower to access |
+| Exists for the lifetime of the method calls, and automatically managed | Objects exists until they are garbage collected, memory also dynamically allocated |
+| Every thread has its own stack | Heap memory is shared among threads |
