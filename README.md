@@ -243,4 +243,218 @@ It is non-deterministic so it doesn't rewards the longest-waiting thread(_Thread
 Sleep is called on the **Thread**, while wait is called on the **Object**.  
 Wait is an interrupter (That's why we need InterruptedException)  
 **Wait** and **Notify** must happen in a synchronized block on the monitor object whereas sleep does not.  
-Sleep operation does not release the locks it holds while on the other hand Wait releases the lock on the object that wait() is called on
+Sleep operation does not release the locks it holds while on the other hand Wait releases the lock on the object that wait() is called on.
+
+#### Resolving Producer and Consumer Problem
+
+```java
+import java.util.LinkedList;
+
+class SharedBuffer {
+    private List<Integer> buffer = new LinkedList<>();
+    private int capacity;
+    
+    // 1st Thread pushes task 1,2,3,4,5
+    //2nd Thread pops 5,4,3,2,1
+    public synchronized void produce() throws InterruptedException{
+        if(buffer.size()==capacity){
+            System.out.println("Buffer full, producer waiting...");
+            wait();
+        }
+        System.out.println("Adding items with the producer...");
+        
+        for(int i=0;i<capacity;i++){
+            buffer.add(i);
+            System.out.println("Added value: "+i);
+        }
+        notify();
+    }
+    public synchronized void consume() throws InterruptedException{
+        if(buffer.size()<capacity){
+            System.out.println("Buffer not full yet, consumer waiting...");
+            wait();
+        }
+        
+        while(!buffer.isEmpty()){
+            int item=buffer.remove(0);
+            System.out.println("Consumer removes: "+item);
+            Thread.sleep(300);
+        }
+        
+        notify();
+    }
+}
+class Consumer implements Runnable{
+    private SharedBuffer sharedBuffer;
+    
+    public Consumer(SharedBuffer sharedBuffer){
+        this.sharedBuffer=sharedBuffer;
+    }
+    
+    @Override
+    public void run(){
+        try{
+            while(true){
+                this.sharedBuffer.consume();
+                Thread.sleep(500);
+            }
+        }catch(InterruptedException e){
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+class Producer implements Runnable{
+    private SharedBuffer sharedBuffer;
+
+    public Producer(SharedBuffer sharedBuffer){
+        this.sharedBuffer=sharedBuffer;
+    }
+
+    @Override
+    public void run(){
+        try{
+            while(true){
+                this.sharedBuffer.produce();
+                Thread.sleep(500);
+            }
+        }catch(InterruptedException e){
+            throw new RuntimeException(e);
+        }
+    }
+}
+public class App {
+    public static void main(String[] args) {
+        var sharedBuffer=new SharedBuffer();
+        
+        Thread t1=new Thread(new Producer(sharedBuffer));
+        Thread t2=new Thread(new Consumer(sharedBuffer));
+        
+        t1.start();
+        t2.start();
+    }
+}
+```
+
+#### Joshua's Bloch Approach - When a thread wakes up spuriously
+
+```java
+while(buffer.size()<capacity){
+            System.out.println("Buffer not full yet, consumer waiting...");
+            wait();
+}
+```
+While protects from:  
+1. Multiple threads waking up simultaneously( As they have to check condition again and again in while loop). With the if loop, they don't check the condition again and they proceed
+2. The condition may not be valid when they proceed with the logic
+3. JVM spuriosly wakes up Thread, when no new notification
+
+***Locks and Reentrant Locks***
+
+**Lock**: A Java Interface more flexible than synchronized
+**Re-entrant Locks**: Concrete Implementation of Lock as the thread that holds the lock can acquire it again and again without getting blocked
+
+__Re-entrant Locks__ example:
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+ReentrantLock lock=new ReentrantLock(true); // When marked true, it is FIFO(First-come, first served)
+
+```
+Fair lock ensures fairness and order, although slightly more overhead becase of maintaining the queue.  
+While unfair lock result in higher throughput because of less context switches(we use it when performance is more important).  
+
+```java
+private static Lock lock=new ReentrantLock(true);
+
+public static void increment(){
+    try{
+        lock.lock();
+    }finally {
+        lock.unlock();
+        //unlock() We can unlock in some other part of the code too, if we want in case of Re-entrant lock
+    }
+}
+```
+
+```java
+Class Worker{
+private Lock lock = new ReentrantLock();
+private Condition condition = lock.newCondition();
+
+public void produce() throws InterruptedException {
+    lock.lock();
+    System.out.println("Produce method...");
+    // wait
+    condition.await();
+    System.out.println("Again the producer method...");
+    lock.unlock();
+}
+
+public void consume() throws InterruptedException {
+    Thread.sleep(2000);
+    lock.lock();
+    System.out.println("Consumer method...");
+    Thread.sleep(3000);
+    // notify
+    condition.signal();
+    lock.unlock();
+}
+}
+
+public class App {
+    public static void main(String[] args) {
+        Worker worker = new Worker();
+
+        Thread t1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try{
+                    worker.produce();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                
+            }
+        });
+
+
+        Thread t2 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try{
+                    worker.consume();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+        });
+        t1.start();
+        t2.start();
+        
+        try{
+            t1.join();
+            t2.join();
+        }catch (InterruptedException e){
+            e.printStackTrace();    
+        }
+        
+    }
+}
+```
+|                                        Re-entrant Lock | Synchronized |
+|-------------------------------------------------------:|--------------|
+| _tryLock()_: Let you acquire the lock without blocking | Not possible |
+|_tryLock(timeout, unit)_: Allows waiting for a certain time | Not supported |
+| _lockInterruptibly()_: Interrupts the thread while in waiting state | Thread is blocked until lock is acquired |
+| FIFO | No order |
+| Multiple condition support __Condition()__ via __newCondition()__ | only __wait()__ and __notify()__ |
+| Manual control of locks through _lock()_ and _unlock()_ method | Automatically managed by JVM |
+
+- [X] Checked Exceptions: Todo
+- [ ] Unchecked Exceptions: Todo
+
+### MultiThreading Concepts
+
