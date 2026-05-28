@@ -1,4 +1,4 @@
-# java-multithreading
+# Java-Multithreading
 Concurrency, Multithreading and parallelization
 
 ## Implementing Runnable Interfaces using lambda expressions
