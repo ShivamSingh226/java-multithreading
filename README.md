@@ -631,5 +631,153 @@ If thread pool size is small, and scheduled tasks are long-running, it can resul
 - Submit tasks that return values using Callable and result wrapped in Future objects  
 - No need to manually manage start() and join()  
 - Threads are created once and can be reused for various tasks. Reduces overhead of thread creation and destruction.  
-- 
+
+---
+
+#### SingleThread Executor
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+class Task implements Runnable {
+    private int id;
+
+    public Task(int id) {
+        this.id = id;
+    }
+
+    @Override
+    public void run() {
+        System.out.println("Task with id: " + id + " is in work - thread id: " + Thread.currentThread().getName());
+        long duration = (long) (Math.random() * 5);
+
+        try {
+            TimeUnit.SECONDS.sleep(duration);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+}
+
+public class SingleThreadExecutor {
+    public static void main(String[] args) {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        
+        for(int i=0;i<5;i++){
+            executorService.execute(new Task(i));
+        }
+        executorService.shutdown();
+        try{
+            if(!executorService.awaitTermination(1000,TimeUnit.MILLISECONDS)){
+                executorService.shutdownNow();// If we want to ensure that executor stops immediately, otherwise comment this code to proceed with remaining tasks
+            }
+        }catch (InterruptedException e){
+            executorService.shutdownNow();
+        }
+        
+    }
+}
+```
+#### Advantages of ThreadPoolExecutor
+
+- Decouples task submission from execution:Submission of tasks without blocking main thread
+- Multiple tasks can be queued up and they will be executed one after another so the lifecycle management of threads become easier.
+- Tasks are run sequentially, so critical section are managed to avoid concurrency bugs.  
+
+#### Fixed Thread Pool Executor Service
+
+```java
+ExecutorService executorService = Executors.newFixedThreadPool(10); // A fixed thread pool of 10 threads handling tasks and being reused again and again to manage tasks
+```
+
+#### ScheduledExecutor
+
+```java
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+class StockMarketUpdater implements Runnable {
+
+    @Override
+    public void run() {
+        System.out.println("Updating and downloading data from the stock Market..");
+    }
+}
+
+public class App {
+    public static void main(String[] args) {
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        executor.scheduleAtFixedRate(new StockMarketUpdater(), 1000, 2000, TimeUnit.MILLISECONDS);
+    }
+}
+```
+
+### Difference between Runnable and Callable
+| Runnable | Callable |
+|--- | --- |
+|A task doesn't return anything | It returns a generic type (Type V) |
+| Can't throw a checked exception | It can throw a checked exception |
+| Can be executed using both _execute()_ and _submit()_ method | Only be executed with _submit()_ method of an _ExecutorService()_ that returns with **Future** object containing the result. | 
+
+![Callable task returning Future Object](img.png)
+
+#### Virtual Threads consider future.get as a non-blocking operation at OS level
+
+Callable method:
+
+```java
+import java.util.ArrayList;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+class Processor implements Callable<String> {
+    private int id;
+
+    public Processor(int id) {
+        this.id = id;
+    }
+
+    @Override
+    public String call() throws Exception {
+        Thread.sleep(2000);
+        return "Id: " + id;
+    }
+
+}
+
+public class App {
+    public static void main(String[] args) {
+        ExecutorService service = Executors.newFixedThreadPool(2);
+        List<Future<String>> list = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            Future<String> future = service.submit(new Processor(i + 1));
+            list.add(future);
+        }
+        for (Future<String> f : list) {
+            try {
+                System.out.println(f.get());
+            } catch (InterruptedException | ExecutionException e){
+                e.printStackTrace();
+            }
+        }
+    }
+}
+```
+
+### TO ensure synchronization along Collections Iterable List etc.
+**Note**: It is blocking since it uses Intrinsic Lock
+```java
+List<Integer> nums=Collections.synchronizedList(new ArrayList<>());
+```
+
+![Collections Framework](img_1.png)
+
+![Collections HashMap Framework](img_2.png)    
+**Only Vector, Stack and HashTable are Thread Safe(Although we dont use HashTable, we use ConcurrentHashMap)**
+
 
