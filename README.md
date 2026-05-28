@@ -724,7 +724,7 @@ public class App {
 
 ![Callable task returning Future Object](img.png)
 
-#### Virtual Threads consider future.get as a non-blocking operation at OS level
+#### Virtual Threads consider `future.get()` as a non-blocking operation at OS level
 
 Callable method:
 
@@ -780,4 +780,6 @@ List<Integer> nums=Collections.synchronizedList(new ArrayList<>());
 ![Collections HashMap Framework](img_2.png)    
 **Only Vector, Stack and HashTable are Thread Safe(Although we dont use HashTable, we use ConcurrentHashMap)**
 
+**To resolve synchronization and concurrency more effectively**  
 
+`CountDownLatch`: Decouples wait/count logic more effectively.(Watch from 9:00 Playback Udemy Video)
