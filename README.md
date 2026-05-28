@@ -456,5 +456,180 @@ public class App {
 - [X] Checked Exceptions: Todo
 - [ ] Unchecked Exceptions: Todo
 
-### MultiThreading Concepts
+## Multi-Threading Concepts
+
+| Deadlock | Livelock |
+| --- | --- |
+| Blocked, do nothing | Running but not making any progress |
+| Each waiting for a lock | Each thread keeps responding to others |
+| Frozen | Active |
+
+### Locks and Cyclic Dependency
+
+**Locks**: Thread should not be blocked indefinitely so we use _tryLock()_ method.  
+**Avoid Cyclic Depenedency**: Each thread acquires the lock in same order to avoid any cyclic dependency in lock acquisition.  
+**Randomness**: Especially in livelock, threads should try to acquire the locks randomly.
+
+### Volatile
+Java Threads executed by two independent CPU may cache the variables locally within its scope (Cache->Stack->CPU (_comprised by a Thread_))
+
+To ensure that the thread initiated updates are visible to other threads as well, we use volatile keyword. A light synchronization mechanism ensuring a particular thread updates are visible to other threads.
+
+**Volatile** enables the variable to be read from CPU (Main memory) instead of Cache memory  
+Sometimes, variable maybe written to the main memory or they share the same cache or scope of a thread, so they may read from the same source without facing any inconsistency.  
+
+
+### Atomic Integer
+- Supports atomic operations, as `counter++` is not an atomic operation, so to handle this concurrently, we should be using `synchronized` keyword on its function
+- Atomic Integer supports atomic operations, `counter.getAndIncrement()` is one such example.
+- It supports ATomic operation for a single operation.
+- If we do:  
+```java
+if(counter.get<10){
+    counter.getAndIncrement();    
+}
+```
+It may throw inconsistent result.
+
+```java
+public class AtomicInteger {
+    private static AtomicInteger counter = new AtomicInteger(0);
+
+    public static void main(String[] args) {
+        Thread t1 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                increment();
+            }
+        });
+
+        Thread t2 = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                increment();
+            }
+        });
+        t1.start();
+        t2.start();
+        try{
+            t1.join();
+            t2.join();
+        }catch(InterruptedException e){
+            e.printStackTrace();
+        }
+
+    }
+
+    public static void increment() {
+        for(int i=0;i<10000;i++){
+            counter.getAndIncrement();
+        }
+    }
+}
+```
+
+#### Semaphores
+Introduced by Djikstra  
+Before Semaphore, no method was there to manage critical sections or shared resources between Thread and Process.  
+Simple variables which can safely control access to shared resources and critical sections in concurrent systems.  
+**Binary Semaphore**: Mutual Exclusion, a thread can access one resource at a time. _0_ if it is acquired, _1_ if it's available.  
+**Counting Semaphore**: Arbitrary number(until it gets to zero) as a resource count, used when multiple resources available (10 DB connections, 5 thread pools).  
+---
+
+- Only maintain count, not the specifics
+- Can work as a trigger for some useful web actions to be initiated
+- Producer-Consumer problem can be implemented using Djikstra.
+
+#### Mutex (Mutual Exclusion)
+
+A Mutex( Mutual Exclusion ): A programming construct ensuring Thread Safety, by ensuring that multiple threads can't access the critical section at the same time.  
+Only one thread can hold Mutex, and execute the code, other threads would be blocked from accessing it.  
+
+| Mutex | Semaphore |
+| --- | --- |
+| Mutual Exclusion(One thread at a time) | Signalling, coordination and resource counting |
+| Only One | Can be any arbitrary non-negative number |
+| Has a single owner | No concept of ownership |
+| Protects critcal section | Controls access to limited number of resources |
+| Blocks if already locked | Blocks if count is 0 |
+| Must be released by the thread which acquired it | Anyone can release it |
+| `synchronized`, `ReentrantLock` | `Semaphore` from `java.util.concurrent` |
+
+#### Semaphore coding example
+
+```java
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+
+enum Downloader {
+    INSTANCE;
+
+    private Semaphore semaphore = new Semaphore(3, true);
+
+    public void download() {
+        try {
+            semaphore.acquire();
+            downloadData();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } finally {
+            semaphore.release();
+        }
+    }
+
+    private void downloadData() {
+        try {
+            System.out.println("Downloading data from the web...");
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class App {
+    public static void main(String[] args) {
+        ExecutorService service = Executors.newCachedThreadPool();
+
+        for (int i = 0; i < 12; i++) {
+            service.execute(new Runnable() {
+                @Override
+                public void run() {
+                    Downloader.INSTANCE.download();
+                }
+            });
+        }
+    }
+}
+```
+
+## Importance of Thread Pools
+
+- Each Thread required 512 KB to 1 MB
+- With each thread having its own execution context and competing for CPU, context-switching becomes a costly operation
+- Manually handling each threads, joining the threads if necessary and handling exception.
+
+**Thread Pools**:A collection of Worker Thread being reused to execute many tasks.
+
+**ExecutorService** provides with threads and its implementations.
+If all threads are busy, tasks are submitted to **BlockingQueue** data structure.  
+
+`newFixedThreadPool(n)`: Initiated lazily,created on demand based on `corePoolSize`.
+
+`newCachedThreadPool()`: Creates new threads as needed and reuses previously constructed threads when available.  
+Removes idle threads after short timeout (usually 60 seconds)
+Useful for short-lived, asynchronous tasks.
+
+`newSingleThreadExecutor()`: Have only one worker thread, used to execute tasks sequentially and uses unbounded queue to sequence tasks in the waiting.  
+
+`newScheduledThreadPool(n)`: Schedules task to run after a delay or schedule tasks to run periodically.  
+
+If thread pool size is small, and scheduled tasks are long-running, it can result into thread-starvation. New tasks may be delayed. Use it to schedule tasks at regular intervals.  
+#### Advantages of ThreadPool
+
+- Submit tasks that return values using Callable and result wrapped in Future objects  
+- No need to manually manage start() and join()  
+- Threads are created once and can be reused for various tasks. Reduces overhead of thread creation and destruction.  
+- 
 
