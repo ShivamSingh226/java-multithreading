@@ -835,3 +835,290 @@ public class Latch {
     }
 }
 ```
+
+#### Cyclic Barrier:
+
+A group of tasks performing concurrent tasks and wait until they are all finished.  
+In case of `CountDownLatch`, a single thread wait for the tasks.  
+
+`CountDownLatch`: One shot event, while `CyclicBarrier` can be resued again and again. It has a runnable, which will run when the count reaches 0.
+
+```java
+import java.util.Random;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+class BarrierWorker implements Runnable {
+    private int id;
+    private Random random;
+    private CyclicBarrier barrier;
+
+    public BarrierWorker(int id, CyclicBarrier barrier) {
+        this.id = id;
+        this.random = new Random();
+        this.barrier = barrier;
+    }
+
+    @Override
+    public void run() {
+        doWork();
+    }
+
+    private void doWork() {
+        System.out.println("The thread with the Id: " + this.id + " starts the work...");
+        try {
+            Thread.sleep(random.nextInt(3000));
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        try {
+            barrier.await();
+        } catch (InterruptedException | BrokenBarrierException e) {
+            e.printStackTrace();
+        }
+        System.out.println("After the await()...");
+
+    }
+}
+
+public class BarrierClassExample {
+    public static void main(String[] args) {
+        ExecutorService service = Executors.newFixedThreadPool(5);
+        CyclicBarrier barrier=new CyclicBarrier(5, new Runnable(){
+           @Override
+           public void run(){
+               System.out.println("All tasks have been finished...");
+           }
+            
+        });
+        
+        for(int i=0;i<5;i++){
+            service.execute(new BarrierWorker(i+1,barrier));
+        }
+        
+        service.shutdown();
+        
+    }
+}
+```
+
+| CyclicBarrier | CountDownLatch |
+|---|---|
+| Reused | Can be used only once |
+| Multiple threads wait for each other | Main thread wait for worker thread |
+| Calls Runnable Action |  No Runnable Support |
+| All threads call await | Only one main thread call await |
+
+## BlockingQueue
+A thread-safe queue, blocks when you try to remove from an empty queue, wor you try to insert into full queue.  
+Uses a ReentrantLock (true then FIFO, false then random)
+
+```java
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+
+public class BlockingQueueExample {
+    public static void main(String[] args) {
+        BlockingQueue<Integer> queue = new ArrayBlockingQueue<>(10);
+        
+        FirstWorker firstWorker=new FirstWorker(queue);
+        SecondWorker secondWorker=new SecondWorker(queue);
+        
+        new Thread(firstWorker).start();
+        new Thread(secondWorker).start();
+        
+    }
+}
+```
+**FirstWorker**: Puts the value into queue.  
+```java
+@Override
+public void run() {
+    int counter = 0;
+
+    while (true) {
+        try {
+            queue.put(counter);
+            System.out.println("Putting item into the queue ... " + counter);
+            counter++;
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+**SecondWorker**:
+```java
+@Override
+public void run() {
+    
+
+    while (true) {
+        try {
+            int counter=queue.take();
+            System.out.println("Taking item from the queue ... " + counter);
+            
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+### LinkedBlockingQueue
+Two separate locks, one for putting and another one for removing. A key improvement in concurrency optimization.  
+Can be both bounder, or unbounded.  
+Useful in supporting concurrent operations.  
+
+### DelayQueue
+
+Adds a delay to perform `put()` and `take()` operation. It will block if the queue is full or empty for the respective operations.  
+Use <mark>Delayed<mark> interface.
+```java
+import java.util.concurrent.TimeUnit;
+
+class DelayWorker implements Delayed {
+    private long duration;
+    private String message;
+
+    public DelayWorker(String message, long duration) {
+        this.duration = duration;
+        this.message = message;
+    }
+
+    @Override
+    public int compareTo(Delayed o) {
+        return 0;
+    }
+
+    @Override
+    public int getDelay(TimeUnit timeUnit){
+        return 0;
+    }
+}
+```
+
+
+```java
+
+BlockingQueue<DelayedWorker> queue=new DelayQueue<>();
+try{
+   queue.put(new DelayedWorker("This is the first message...", 2000)); 
+}catch(InterruptedException e){
+    e.printStackTrace();
+}
+
+while(!queue.isEmpty()){
+    try{
+        System.out.println(queue.take());
+    }catch(InterruptedException e){
+        e.printStackTrace();
+    }    
+}
+```
+
+### PriorityBlockingQueue
+
+A thread-Safe priorityQueue with heap data structure. 
+
+Has O(logN) for addition and removal it has O(N).  
+Has single Reentrant Lock.Unbounded.  
+Blocks when we try to `take()` from an empty Queue. No fairness.
+
+```java
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.PriorityBlockingQueue;
+
+class FirstWorker implements Runnable {
+    private PriorityBlockingQueue<String> queue;
+
+    public FirstWorker(PriorityBlockingQueue<String> queue) {
+        this.queue = queue;
+    }
+
+    @Override
+    public void run() {
+
+    }
+}
+
+public class MainExample {
+    public static void main(String[] args) {
+        BlockingQueue<String> queue=new PriorityBlockingQueue<>();
+        
+        FirstWorker firstWorker=new FirstWorker(queue);
+        new Thread(firstWorker).start();
+    }
+}
+```
+
+## ConcurrentHashMap  
+
+Every hashMap is divided into segments(by default 16 elements in 1D array).  
+`Collections.synchronize(new HashMap<>())`: It has intrinsic lock on entire HashMap.  
+
+
+After Java 8, it introduces bin-level locking:  
+- Read operations in ConcurrentHashMap is thread-safe, even without synchronized keyword.  
+- Volatile fields to ensure visibility, because the value instead of being stored into cache is flushed into main memory, **happens-before** relationship is ensured:  
+  If Action A happens before Action B, then side-effects of A is visible to B.  
+- That's why even without acquiring locks, you can easily read the data without acquiring any lock or getting corrupted data.  
+- **Fine-Grain Locking System (FGLS)**: Instead of segments, we have a lock on a single bucket(Single-Array data slot)  
+- Insertion of first-value happens through a lock-free mechanism, **Compare and Swap**  
+### Compare and Swap
+- Atomic operation being handled through **Unsafe** or **VarHandle** directly access memory with Atomic Operations.  
+- A mechanism to read and change data without acquiring lock on a low-level mechanism  
+
+## Using TreeBin on ConcurrentHashMap
+- After the `TREEFY_THRESHOLD` is crossed, that particular bucket is converted into Red-Black Tree, which can undergo lots of rotation and nodes can interchange.  
+- So, a thread processing a root node, the root node may change and another thread can enter synchronized block on another root Node.  
+- That's why <mark>TreeBin</mark> is used, which only points towards the root node of the _Red-Black_ Tree. Read-Operations are thread-safe, first write operation happens under CAS.
+- After that if on a bucket, there is a LinkedList, the synchronization happens on head of the LinkedList and if there is Red-Black Tree under the hood of _TreeBin_ then that TreeBin is synchronized.
+
+```java
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+class MapFirstWorker implements Runnable {
+    private ConcurrentMap<String, Integer> map;
+
+    public MapFirstWorker(ConcurrentMap<String, Integer> map) {
+        this.map = map;
+    }
+
+    @Override
+    public void run() {
+
+        try {
+            map.put("B", 12);
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+public class ConcurrentMapExample {
+    public static void main(String[] args) {
+        ConcurrentMap<String, Integer> map = new ConcurrentHashMap<String,Integer>();
+        MapFirstWorker firstWorker=new MapFirstWorker(map);
+        new Thread(firstWorker).start();
+    }
+}
+```
+
+#### Slipping Condition
+When two threads read a value and makes decision based on stale data, and then write-back conflicting and outdated values.  
+
+To avoid it we use a thread-safe method,
+`map.putIfAbsent("key","value");`
+instead of  
+```java
+if(!map.containsKey("Key")){
+    map.put("Key","Value");    
+}
+```
