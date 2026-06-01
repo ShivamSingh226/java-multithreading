@@ -1122,3 +1122,84 @@ if(!map.containsKey("Key")){
     map.put("Key","Value");    
 }
 ```
+
+### Exchanger
+
+Two threads exchange objects between them.
+
+```java
+import java.util.concurrent.Exchanger;
+
+class FirstThread implements Runnable {
+    private int counter;
+    private Exchanger<Integer> exchanger;
+    public FirstThread(Exchanger<Integer> exchanger){
+        
+        this.exchanger=exchanger;
+    }
+    @Override
+    public void run(){
+        while(true) {
+            counter++;
+            System.out.println("First Thread incremented the counter...");
+            try {
+                counter=exchanger.exchange(counter);
+                System.out.println("First Thread to get the counter: "+counter);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            
+            try{
+                Thread.sleep(1000);
+            }catch (InterruptedException e){
+                e.printStackTrace();
+            }
+            
+        }
+    }
+}
+class SecondThread implements Runnable {
+    private int counter;
+    private Exchanger<Integer> exchanger;
+    public SecondThread(Exchanger<Integer> exchanger){
+
+        this.exchanger=exchanger;
+    }
+    @Override
+    public void run(){
+        while(true) {
+            counter--;
+            System.out.println("Second thread decremented the counter.");
+            try {
+                counter=exchanger.exchange(counter);
+                System.out.println("Second Thread to get the counter: "+counter);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            try{
+                Thread.sleep(1000);
+            }catch (InterruptedException e){
+                e.printStackTrace();
+            }
+
+        }
+    }
+}
+public class ExchangerExample{
+    public static void main(String[] args) {
+        Exchanger<Integer> exchanger=new Exchanger<>();
+        
+        FirstThread t1=new FirstThread(exchanger);
+        SecondThread t2=new SecondThread(exchanger);
+        
+        new Thread(t1).start();
+        new Thread(t2).start();
+        
+    }
+}
+```
+
+### CopyOnWriteArray
+
+No need for locking while reading; update, set and delete is a O(n) operation because thread makes a copy of the list and thus they are atomic operations.  
