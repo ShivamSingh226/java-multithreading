@@ -1203,3 +1203,334 @@ public class ExchangerExample{
 ### CopyOnWriteArray
 
 No need for locking while reading; update, set and delete is a O(n) operation because thread makes a copy of the list and thus they are atomic operations.  
+Reading from `copyOnWriteArray()` is thread safe. For example:  
+Thread 1 is reading while Thread 2 is updating.  
+If another thread and wants to update or modify it has to wait for Thread 2.  
+After update operation is complete, Thread 1 updates the reference.  
+
+
+
+```java
+import java.util.Arrays;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+public class ConcurrentArray {
+  private List<Integer> list;
+
+  public ConcurrentArray() {
+    this.list = new CopyOnWriteArrayList<>();
+    this.list.addAll(Arrays.asList(0,0,0,0,0,0,0,0));
+  }
+  
+}
+public class MainApp{
+  public static void main(String[] args) {
+    ConcurrentArray concurrentArray=new ConcurrentArray();
+    concurrentArray.simulate();
+  }
+}
+```
+
+## Java Streams API
+
+- Sequence of elements from a source that supports data processing.  
+- Introduced Functional Programming in Java( i.e, where programs are constructed by applying and modifying functions)  
+- Streams rely on Lambda Expressions
+- Used in Parallel Programming
+
+### Pipelining
+Intermediate source of operations(filtering, sorting, querying) returning streams as well.  
+Data Source -> Intermediate Ops(Filtering, Sorting, Querying) -> Terminal Operation (Collect, Reduce)  
+
+For example:  
+`IntStream.range(0,5).forEach(x ->System.out.println(x+" "));`  
+`IntStream.range(0,10).filter(x -> x>4).forEach(x -> System.out.println(x+" "));`
+
+```java
+import java.util.Comparator;
+import java.util.stream.Collectors;
+
+public class MainApp {
+  public static void main(String[] args) {
+    String[] names = {};
+    List<Book> result=Stream.of(names).sorted(Comparator.reverseOrder()).forEach(System.out::println).collect(Collectors.toList());
+    result.stream().forEach(System.out::println);
+  }
+}
+```
+
+- Provides interface to data structure representing sequenced set of values.  
+- Fixed data structures whose elements are computed on demand(Lazy loading): Can be used only once.  
+
+```java
+List<Book> result=books.stream().filter(b -> b.getType()==Type.NOVEL).sorted(Comparator.comparing(Book::getAuthor)).map(Book::getTitle).collect(Collectors.toList());
+result.stream().forEach(System.out::println);
+```
+
+
+## Exercise - Filtering
+
+```json
+Book [title=The Trial, author=Franz Kafka, pages=240, type=NOVEL]
+Book [title=Ancient Greece, author=Robert F., pages=435, type=HISTORY]
+Book [title=Ancient Rome, author=Robert F., pages=860, type=HISTORY]
+Book [title=The Stranger, author=Albert Camus, pages=560, type=NOVEL]
+```
+ Select all the books where the title is made up of exactly two words.  
+ ```java
+books.stream()
+        .filter(b -> b.getTitle().split(" ").length ==2)
+        .collect(Collectors.toList())
+        .forEach(System.out::println);
+```
+
+### External Iteration
+
+```java
+List<String> titles=new ArrayList<>();
+Iterator<Book> iterator=books.iterator();
+
+while(iterator.hasNext()){
+    titles.add(iterator.next().getTitle());
+}
+```
+- Array has continuous items next to each other  
+- No parallel programming support  
+
+### Internal Iteration
+
+```java
+List<String> titles2=books.stream().map(Book::getTitle).collect(Collectors.toList());
+titles2.forEach(e -> System.out.println(e));
+```
+
+**Loop Fusion**: Merging of different operations in the same pass.  
+**Short Circuiting**: Java don't need to process whole stream to produce a result.  
+
+
+```java
+List<String> words=Arrays.asList("Adam","Ana","Daniel");
+List<Integer> lengths=words.stream().map(String::length).collect(Collectors.toList());
+lengths.stream().forEach(System.out::println);
+
+List<Integer> nums=Arrays.asList(1,2,3,4);
+nums.stream().map(x -> x*x).collect(Collectors.toList())
+        .forEach(System.out::println);
+
+```
+
+**FlatMap**: Map each array not with a stream but with the contents of that stream.  
+For example: `[[1,3,5],[5,13]]` becomes `[1,3,5,13]` but with only `map()`, it becomes `Stream<String[]>`.  
+With `flatMap()`, we get `Stream<String>`.  
+
+```java
+String[] array={"hello","shell"};
+List<String> unique=Arrays.stream(array).map(w->w.split("")).flatMap(Arrays::stream).distinct().collect(Collectors.toList());
+
+unique.stream().forEach(System.out::println);
+```
+
+## Exercise-Mapping
+
+```json
+Your task is that given two lists of numbers ([1, 2, 3], [4, 5]). Generate all pairs of possible numbers!
+
+So the result in the case should be: (1,4), (1,5), (2,4),(2,5),(3,4),(3,5)
+
+Good luck!
+```
+
+```json
+List<Integer> nums1=Arrays.asList(1,2,3);
+List<Integer> nums2=Arrays.asList(4,5);
+List<List<Integer>> pairs=nums1.stream()
+.flatMap(i -> nums2.stream().map(j -> Arrays.asList(i,j))).collect(Collectors.toList());
+System.out.println(Arrays.toString(pairs.toArray()));
+```
+
+#### GroupingBy function
+```java
+var result=people.stream().collect(Collectors.groupingBy(People::getDepartment(), Collectors.summingInt(Person::getAge)));
+var result=people.stream().collect(Collectors.groupingBy(People::getDepartment,Collectors.mapping(Person::getName,Collectors.toList())));// Will only output the required value in the 'Value' of the 'Key,Value'. For example: HR - [Adam], IT- [Kevin, Johnson]
+
+System.out.println(result);
+```
+
+If we want to sort the keys:
+
+```java
+import java.util.stream.Collectors;
+
+Collectors.groupingBy(
+        classifier,
+        TreeMap::new,
+        downstreamCollector
+)
+```
+
+```java
+var result=people.stream().flatMap(p -> p.getDepartments().stream()
+        .map(d->new AbstractMap.SimpleEntry<>(d,p)))
+        .collect(Collectors.toList());
+```  
+
+### Partioning By
+
+```java
+var result=people.stream().collect(Collectors.partitioningBy(p->p.getName().length()<5,
+        Collectors.mapping(p->p.getName(), Collectors.toList())));
+```
+
+## Optionals
+```java
+Optional<Integer> result=books.stream().reduce(INTEGER:: MAX);
+result.ifPresent(System.out::println);
+```
+We avoid NullPointerException using this.  
+Similarly, we have _OptionalInt_, _OptionalFloat_.  
+So, essentially when we do `result.orElse(0)`, if the result doesn't exist instead of throwing exception it will throw __0__.  
+
+Other methods: __allMatch()__, __noneMatch()__, __findFirst()__, and __findAny()__ .
+
+## Parallelization 
+
+```java
+private static long sum(long n){
+    return LongStream.rangeClosed(1,n).reduce(0L, Long::Sum);
+    
+}
+
+private static long parallelSum(long n){
+    return LongStream.rangeClosed(1,n).parallel().reduce(0L, Long::Sum);
+}
+```
+
+```java
+
+public static void main(String[] args){
+    long currentTime=System.currentTimeMillis();
+    
+   int numOfPrimes= IntStream.rangeClosed(2, Integer.MAX_VALUE/100).filter(App::isPrime).count();
+  System.out.println("Time Take: "+(System.currentTimeMillis()-currentTime));
+
+
+  long currentTime=System.currentTimeMillis();
+
+  int numOfPrimes= IntStream.rangeClosed(2, Integer.MAX_VALUE/100).parallel().filter(App::isPrime).count();
+  System.out.println("Time Take: "+(System.currentTimeMillis()-currentTime));
+}
+public static boolean isPrime(long num){
+    if(num<=1) return false;
+    if(num==2) return true;
+    if(num%2==0) return false;
+    
+    long maxDivisor=(long) Math.sqrt(num);
+    
+    for(int i=3;i<=maxDivisor;i+=2){
+        if(num%i==0){
+            return false;
+        }
+    }
+    return true;
+}
+```
+
+```java
+package com.globalsoftwaresupport;
+
+import java.io.Serializable;
+
+public class Person implements Serializable {
+
+	private static final long serialVersionUID = 1L;
+	private int personId;
+
+	public Person(int personId) {
+		this.personId = personId;
+	}
+
+	public int getPersonId() {
+		return personId;
+	}
+
+	public void setPersonId(int personId) {
+		this.personId = personId;
+	}
+}
+/// To convert Java Object into stream of bytes we use serializable.  
+package com.globalsoftwaresupport;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import com.sun.xml.internal.txw2.output.StreamSerializer;
+
+public class ParallelSaveOperation {
+
+  public static final String DIRECTORY = System.getProperty("user.dir") + "/test/";
+
+  public static void main(String[] args) throws IOException {
+
+    // create the directory
+    Files.createDirectories(Paths.get(DIRECTORY));
+
+    ParallelSaveOperation app = new ParallelSaveOperation();
+
+    // generate a large number of Person objects
+    List<Person> people = app.generatePeople(100000);
+
+    // sequential algorithm
+    long start = System.currentTimeMillis();
+    people.stream().forEach(ParallelSaveOperation::save);
+    System.out.println("Time taken sequential: " + (System.currentTimeMillis() - start));
+
+    // parallel algorithm
+    start = System.currentTimeMillis();
+    people.parallelStream().forEach(ParallelSaveOperation::save);
+    System.out.println("Time taken parallel: " + (System.currentTimeMillis() - start));
+  }
+
+  private static void save(Person person) {
+    try (FileOutputStream fos =
+                 new FileOutputStream(new File(DIRECTORY + person.getPersonId() + ".txt"))){
+    } catch(IOException exception) {
+      exception.printStackTrace();
+    }
+  }
+
+  private List<Person> generatePeople(int num) {
+    return Stream.iterate(0, n -> n + 1)
+            .limit(num)
+            .map(x -> {
+              return new Person(x);
+            })
+            .collect(Collectors.toList());
+  }
+}
+
+```
+## Parallel Programming
+Multi-Threading uses Time-splicing algorithm. In case of a single processor core, two threads uses time-splicing algorithm to access single processor core.  
+**Drawbacks**:
+- Load Balancing
+- Communication factor between two threads.(Parallel Slowdown)
+## Virtual Threads
+Platform Threads are blocked by I/O operations.  
+
+Virtual Threads executed by Platform Threads, or Carrier Threads.  
+Virtual Threads blocked by I/O operations and Platform Thread will do the other kinds of works.  
+
+Platform Threads are always related to underlying OS Threads.  
+
+Platform Threads and Virtual Thread lie in JVM.  
+- When a virtual Thread is blocked, JVM saves the state on heap memory and platform thread uses another Virtual Thread. But, platform thread remain blocked as it is bounded to the OS level thread.  
+- No need to reuse it really lightweight, used and disposed
+- Cheap to block, no OS level thread is blocked as JVM used carrier Thread.  
+- Use very limited resources as it is used in HTTP operation  
+
