@@ -1534,3 +1534,181 @@ Platform Threads and Virtual Thread lie in JVM.
 - Cheap to block, no OS level thread is blocked as JVM used carrier Thread.  
 - Use very limited resources as it is used in HTTP operation  
 
+```java
+public class VirtualTask{
+    public static void run(){
+      
+        try{
+          Thread.sleep(2000);
+        }catch(InterruptedException e){
+           e.printStackTrace(); 
+        }
+        
+    }
+}
+public class VirtualThread{
+    public static void main(String[] args) throws InterruptedException{
+        var factory=Thread.ofVirtual().name("virtual-",0).factory();
+        
+        var t1=factory.newThread(VirtualTask::run);
+        var t2=factory.newThread(VirtualTask::run);
+        
+        t1.start();
+        t2.start();
+        
+        // Daemon Threads: Virtual Threads are Daemon Threads
+        t1.join();
+        t2.join();
+    }
+}
+```
+
+Virtual Threads are daemon Threads, and JVM exits when non-daemon threads have completed their tasks. That's the reason we wait for these two threads.
+
+```java
+import java.time.Duration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+
+public class ComparisonPlatformVirtual {
+  public static void main(String[] args) throws InterruptedException, ExecutionException {
+    for (int i = 0; i < 1000; i++) {
+      Thread.ofPlatform().start(() -> {
+        try {
+          Thread.sleep(Duration.ofSeconds(5));
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      });
+    }
+    // Virtual Threads
+    var service = Executors.newVirtualThreadPerTaskExecutor();
+    for(int i=0;i<10000;i++){
+        service.submit(()->{
+            try{
+                System.out.println("Thread "+Thread.currentThread());
+                Thread.sleep(Duration.ofSeconds(10));
+            }catch(InterruptedException e){
+                e.printStackTrace();            
+            }
+        })
+    }
+  }
+}
+```
+
+Sometimes, Virtual Threads can't be unmounted from the carrier:  
+We have two reasons for this:  
+
+- Synchronized method
+```java
+public void example{
+
+    synchronized(App.this){
+        
+    }
+}
+```
+- Reentrant Lock
+```java
+public void example{
+    lock.lock();
+    lock.unlock();
+}// Better approach
+```
+- When a Virtual thread runs a native or foreign method.  
+
+## Futures
+
+While we do `.get()` method in Futures, it blocks the main thread.  
+
+**CompletableFutures** is non-blocking and asynchronous. No need to call `.get()` method as it has in-built callback mechanism enabled on the main thread.
+
+```java
+import java.util.concurrent.ExecutorService;
+
+ExecutorService cpuExecutor=Executors.newFixedThreadPool(5);
+ExecutorService ioExecutor=Executors.newCachedThreadPool();
+
+CompletableFuture.supplyAsync(()->"Hello World! ",cpuExecutor)
+        .thenApplyAsync(s->s.toUpperCase(), ioExecutor)
+        .thenApply(s-> s+ " something")
+        .thenAccept(System.out::println);
+```
+
+**CompletableFuture** can be combined too.  
+
+## Structured Concurrency
+
+**Asynchronous and Non-Blocking operation** is good with _CompletableFuture_ . But submitted tasks may be running in background and thence hard to debug too.  
+Well-defined blocks and we wait for all threads to complete execution.  
+
+**Unstructured concurrency**: Large numbers of threads difficult to track.  
+Asynchronous, Non-blocking threads.  
+**Orphaned Threads**: Parent-Child relationships not present in case of Threads.  
+
+**StructuredTaskScope** and **Subtask** classes can handle these parent-child relationships.  
+- Waiting for all threads to finish execution before shutdown
+- Shutdown when given thread fails
+- Shutdown when first task succeeds
+
+```java
+import java.util.concurrent.StructuredTaskScope;
+
+public class TaskMain {
+  static void main(String[] args) {
+    try (var scope = new StructuredTaskScope<String>()){
+        var process1=new LongProcess(3, "result 1");
+        var process2=new LongProcess(7, "result 2");
+        
+        Subtask<String> res1=scope.fork(process1);
+        Subtask<String> res2=scope.fork(process2);
+        
+        scope.join();
+        
+        if(res1.state()==State.SUCCESS){
+          System.out.println(res1.get());
+        }
+        if(res2.state()==State.SUCCESS){
+          System.out.println(res2.get());
+        }
+        // Combine the results
+        // get() will not block because the join() waits for the threads to get finished
+        System.out.println(res1.get()+ " - "+res2.get());
+      
+      //Shutdown the scope after all child threads terminate
+      
+      
+    }
+  }
+}
+
+
+
+```
+
+
+`try(var scope=new StructuredTaskScope.ShutdownOnFailure())` throws illegalStateException when any of the thread fails(Child Thread) it notifies Parent Thread(to shutDown).  
+Similarly for shutdownOnSuccess:  
+`try(var scope= new StructuredTaskScope.ShutdownOnSuccess<String>())`
+
+### Subroutines,Coroutines and Continuation  
+**Subroutines:** Single entry point, Subroutine/method returns some value. In Java, we cannot return any value, so we return back to the caller method.  
+With the help of Continuation, we can proceed with that VirtualThread position which was saved on Heap Memory.  
+The VT is reaccessed again with the help of Coroutines(Multiple entry points).  
+Freeze the running of the coroutine using `yield()` method.  
+
+Coroutine run() calls -> Goes into Coroutine(), calls `yield()` -> Then coroutine returns -> When Thread unblocks, coroutine run() gets called again -> and it continues from the same point
+
+We need to store the stack frames on the heap memory as well.  
+**Continuation**: Keeps the stack and code pointer so the stack can be recreated again when we call `run()` method again.  
+
+
+### Scaling 
+**Vertical Scaling**: Adding more resources to the single underlying resources in the form of CPU or memory.  
+
+**Horizontal Scaling**: Dealing with multiple instances of same microservices.  
+These instances share information with each other.  
+ We can use Structured Concurrency and Virtual threads.  
+Virtual threads can access way more requests while dealing several requests.  
+
