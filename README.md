@@ -1712,3 +1712,7 @@ These instances share information with each other.
  We can use Structured Concurrency and Virtual threads.  
 Virtual threads can access way more requests while dealing several requests.  
 
+## Fork-Join Framework
+
+- Interface of **ExecutorService** being used for parallel computing.  
+- 
